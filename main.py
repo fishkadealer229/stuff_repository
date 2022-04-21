@@ -20,8 +20,8 @@ password = ''
 update_value = ''
 count_values = 1
 last_username = ''
-blank_values = ["Имя Фамилия", "Пол", "Юзернейм", 'Должность', "Фотография"]
-requests = ['своё имя и фамилию', 'свой пол', 'свой юзернейм', "свою должность в компании",
+blank_values = ["Имя Фамилия", "Пол", "Юзернейм", 'Должность', 'Пароль', "Фотография"]
+requests = ['своё имя и фамилию', 'свой пол', 'свой юзернейм', "свою должность в компании", "свой пароль",
             'свою фотографию для профиля']
 ind = 0
 logging.basicConfig(level=logging.INFO)
@@ -98,46 +98,52 @@ async def admin_register(call: types.CallbackQuery):
 @dp.callback_query_handler(text='update_blank')
 async def update_blank(call: types.CallbackQuery):
     global blank_values, update_flag, register_flag, search_flag, flag1
-    register_flag = False
-    search_flag = False
-    update_flag = True
-    flag1 = True
-    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
-    for i in blank_values:
-        keyboard.add(types.KeyboardButton(text=f'{i}'))
-    await call.message.answer('Что вас не устраивает?', reply_markup=keyboard)
-    await call.answer('Изменение анкеты')
+    if len(db_values) == 0:
+        await begin(call.message)
+    else:
+        register_flag = False
+        search_flag = False
+        update_flag = True
+        flag1 = True
+        keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+        for i in blank_values:
+            keyboard.add(types.KeyboardButton(text=f'{i}'))
+        await call.message.answer('Что вас не устраивает?', reply_markup=keyboard)
+        await call.answer('Изменение анкеты')
 
 
 @dp.callback_query_handler(text='end_register')
 async def end_register(call: types.CallbackQuery):
     global register_flag, admin_flag, update_flag, search_flag
-    register_flag = True
-    search_flag = False
-    update_flag = False
-    name, surname = db_values[0].split()
-    path = f'\\photos\\{call.message.chat.id}.jpg'
-    if admin_flag:
-        keyboard = types.InlineKeyboardMarkup()
-        keyboard.add(types.InlineKeyboardButton(text='Перейти к регистрации на сайте', url='https://github.com/'))
-        await call.message.answer('Вот ссылка.'
-                                  ' Там вам нужно будет войти по юзернейму и паролю, которые вы здесь ввели.',
-                                  reply_markup=types.ReplyKeyboardRemove())
-        await call.message.answer('Удачи!', reply_markup=keyboard)
-        cur.execute(fr'''insert into users (name_surname, gender, username, profession, chat_id, photo_path, password) 
-        values("{name + ' ' + surname}", "{db_values[1]}", "{db_values[2]}", "{db_values[3]}", "{call.message.chat.id}",
-"{os.getcwd() + path}", "{db_values[4]}")''')
-        con.commit()
+    if len(db_values) == 0:
+        await begin(call.message)
     else:
-        cur.execute(fr'''insert into users (name_surname, gender, username, profession, chat_id, photo_path, password) 
-                values("{name + ' ' + surname}", "{db_values[1]}", "{db_values[2]}", "{db_values[3]}",
-                 "{call.message.chat.id}", "{os.getcwd() + path}")''')
-        con.commit()
-    keyboard = types.InlineKeyboardMarkup()
-    keyboard.insert(types.InlineKeyboardButton(text='Да', callback_data='search'))
-    keyboard.insert(types.InlineKeyboardButton(text='Нет', callback_data='ok'))
-    await call.message.answer('Хотите кого-то найти?', reply_markup=keyboard)
-    await call.answer('Поиск...')
+        name, surname = db_values[0].split()
+        path = f'\\photos\\{call.message.chat.id}.jpg'
+        if admin_flag:
+            keyboard = types.InlineKeyboardMarkup()
+            keyboard.add(types.InlineKeyboardButton(text='Перейти к регистрации на сайте', url='https://github.com/'))
+            await call.message.answer('Вот ссылка.'
+                                      ' Там вам нужно будет войти по юзернейму и паролю, которые вы здесь ввели.',
+                                      reply_markup=types.ReplyKeyboardRemove())
+            await call.message.answer('Удачи!', reply_markup=keyboard)
+            cur.execute(fr'''insert into users (name_surname, gender, username, profession, chat_id, photo_path, password) 
+            values("{name + ' ' + surname}", "{db_values[1]}", "{db_values[2]}", "{db_values[3]}", "{call.message.chat.id}",
+    "{os.getcwd() + path}", "{db_values[4]}")''')
+            con.commit()
+        else:
+            cur.execute(fr'''insert into users (name_surname, gender, username, profession, chat_id, photo_path,
+             password) values("{name + ' ' + surname}", "{db_values[1]}", "{db_values[2]}", "{db_values[3]}",
+                     "{call.message.chat.id}", "{os.getcwd() + path}", "{db_values[4]}")''')
+            con.commit()
+        keyboard = types.InlineKeyboardMarkup()
+        keyboard.insert(types.InlineKeyboardButton(text='Да', callback_data='search'))
+        keyboard.insert(types.InlineKeyboardButton(text='Нет', callback_data='ok'))
+        await call.message.answer('Хотите кого-то найти?', reply_markup=keyboard)
+        await call.answer('Поиск...')
+        register_flag = True
+        search_flag = False
+        update_flag = False
 
 
 @dp.callback_query_handler(text='search')
@@ -161,85 +167,104 @@ async def ok(call: types.CallbackQuery):
 async def db_insert(message: types.Message):
     global db_values, register_flag, search_flag, update_flag, flag1, flag2, new_value, update_value
     not_data = False
-    if register_flag:
-        await message.reply('Эу нормально общайся. ОК?')
-    elif search_flag:
-        for value in ['name_surname', 'profession']:
-            if (message.text,) in list(cur.execute(f'''select {value} from users''')):
-                username = '@' + list(cur.execute(f'select username from users where {value}="{message.text}"'))[0][0]
-                await message.answer(f'Вот его юзернейм: {username}')
-                break
-            else:
-                not_data = True
-        if not_data:
-            await message.answer('К сожалению, по эти данным ничего не найдено:(')
-    elif update_flag:
-        new_value = True
-        if new_value and message.text in blank_values:
-            update_value = message.text
-            new_value = False
-            flag1 = True
-        else:
-            if flag1:
-                db_values[blank_values.index(update_value)] = message.text
-                flag1 = False
-            else:
-                flag2 = True
-        if flag1:
-            if message.text != "Фотография":
-                keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
-                keyboard.add(types.KeyboardButton(text=f'{db_values[blank_values.index(update_value)]}'))
-                await message.answer('Введите новое значение.', reply_markup=keyboard)
-            else:
-                await message.answer('Отлично', reply_markup=types.ReplyKeyboardRemove())
-                keyboard = types.InlineKeyboardMarkup()
-                keyboard.add(types.InlineKeyboardButton(text='Оставить прежнию', callback_data='next_data'))
-                await message.answer('Отправьте новую фотографию', reply_markup=keyboard)
-        else:
-            keyboard = types.InlineKeyboardMarkup()
-            keyboard.add(types.InlineKeyboardButton(text='Да', callback_data='update_blank'))
-            keyboard.add(types.InlineKeyboardButton(text='Нет', callback_data='end_register'))
-            await message.answer('Ваши данные успешно сохранены', reply_markup=types.ReplyKeyboardRemove())
-            await message.answer('Хотите ещё что-нибудь изменить?', reply_markup=keyboard)
+    if 'ты ' in message.text.lower():
+        await message.answer('Кто обзывается, тот сам так называется 😠')
+    elif 'Я ' in message.text:
+        await message.answer('"Я" последняя буква в алфавите, если что')
+    elif 'v ' in message.text.lower() or 'z ' in message.text.lower():
+        await message.answer('Извините, но наш бот находится вне политики, поэтому убидительно просим вас больше'
+                             ' не отправлять нам данные символы')
+    elif 'война' in message.text or 'war' in message.text:
+        await bot.delete_message(message.chat.id, message.message_id)
+        await message.answer('Правильно "спецоперация"')
     else:
-        if message.text.isdigit():
-            db_values.append(int(message.text))
+        if register_flag:
+            await message.reply('Эу нормально общайся. ОК?')
+        elif search_flag:
+            for value in ['name_surname', 'profession']:
+                if (message.text,) in list(cur.execute(f'''select {value} from users''')):
+                    usernames = list(cur.execute(f'select username from users where {value}="{message.text}"'))
+                    for username_text in usernames:
+                        username = '@' + username_text[0]
+                        await message.answer(f'Вот его юзернейм: {username}')
+                    break
+                else:
+                    not_data = True
+            if not_data:
+                await message.answer('К сожалению, по эти данным ничего не найдено:(')
+        elif update_flag:
+            new_value = True
+            if new_value and message.text in blank_values:
+                update_value = message.text
+                new_value = False
+                flag1 = True
+            else:
+                if flag1:
+                    db_values[blank_values.index(update_value)] = message.text
+                    flag1 = False
+                else:
+                    flag2 = True
+            if flag1:
+                if message.text != "Фотография":
+                    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+                    keyboard.add(types.KeyboardButton(text=f'{db_values[blank_values.index(update_value)]}'))
+                    await message.answer('Введите новое значение.', reply_markup=keyboard)
+                else:
+                    await message.answer('Отлично', reply_markup=types.ReplyKeyboardRemove())
+                    keyboard = types.InlineKeyboardMarkup()
+                    keyboard.add(types.InlineKeyboardButton(text='Оставить прежнию', callback_data='next_data'))
+                    await message.answer('Отправьте новую фотографию', reply_markup=keyboard)
+            else:
+                keyboard = types.InlineKeyboardMarkup()
+                keyboard.add(types.InlineKeyboardButton(text='Да', callback_data='update_blank'))
+                keyboard.add(types.InlineKeyboardButton(text='Нет', callback_data='end_register'))
+                await message.answer('Ваши данные успешно сохранены', reply_markup=types.ReplyKeyboardRemove())
+                await message.answer('Хотите ещё что-нибудь изменить?', reply_markup=keyboard)
         else:
-            db_values.append(message.text)
-        if not photo_flag:
-            keyboard = types.InlineKeyboardMarkup()
-            keyboard.add(types.InlineKeyboardButton(text='Да', callback_data='next'))
-            keyboard.add(types.InlineKeyboardButton(text='Конечно', callback_data='next'))
-            await message.answer('Отлично', reply_markup=types.ReplyKeyboardRemove())
-            await message.answer('Продолжаем?', reply_markup=keyboard)
-        else:
-            keyboard = types.InlineKeyboardMarkup()
-            keyboard.add(types.InlineKeyboardButton(text='Да', callback_data='end_register'))
-            keyboard.add(types.InlineKeyboardButton(text='Нет', callback_data='update_blank'))
-            await message.answer('Отлично', reply_markup=types.ReplyKeyboardRemove())
-            await message.answer('Закончим регистрацию?', reply_markup=keyboard)
+            if message.text.isdigit():
+                db_values.append(int(message.text))
+            else:
+                db_values.append(message.text)
+            if not photo_flag:
+                keyboard = types.InlineKeyboardMarkup()
+                keyboard.add(types.InlineKeyboardButton(text='Да', callback_data='next'))
+                keyboard.add(types.InlineKeyboardButton(text='Конечно', callback_data='next'))
+                await message.answer('Отлично', reply_markup=types.ReplyKeyboardRemove())
+                await message.answer('Продолжаем?', reply_markup=keyboard)
+            else:
+                keyboard = types.InlineKeyboardMarkup()
+                keyboard.add(types.InlineKeyboardButton(text='Да', callback_data='end_register'))
+                keyboard.add(types.InlineKeyboardButton(text='Нет', callback_data='update_blank'))
+                await message.answer('Отлично', reply_markup=types.ReplyKeyboardRemove())
+                await message.answer('Закончим регистрацию?', reply_markup=keyboard)
 
 
 @dp.callback_query_handler(text='next')
 async def next1(call: types.CallbackQuery):
     global ind, count_values, db_values
-    if count_values == len(db_values):
-        ind += 1
-        await register_asks(call)
-        await call.answer('next_data')
-        count_values += 1
+    if len(db_values) == 0:
+        await begin(call.message)
     else:
-        await call.answer('Вы ещё не ответили на прошлый вопрос')
+        if count_values == len(db_values):
+            ind += 1
+            await register_asks(call)
+            await call.answer('next_data')
+            count_values += 1
+        else:
+            await call.answer('Вы ещё не ответили на прошлый вопрос')
 
 
 @dp.callback_query_handler(text='next_data')
 async def next_data(call: types.CallbackQuery):
-    await call.message.answer('OK')
-    keyboard = types.InlineKeyboardMarkup()
-    keyboard.add(types.InlineKeyboardButton(text='Да', callback_data='end_register'))
-    keyboard.add(types.InlineKeyboardButton(text='Нет', callback_data='update_blank'))
-    await call.message.answer('Отлично', reply_markup=types.ReplyKeyboardRemove())
-    await call.message.answer('Закончим регистрацию?', reply_markup=keyboard)
+    if len(db_values) == 0:
+        await begin(call.message)
+    else:
+        await call.message.answer('OK')
+        keyboard = types.InlineKeyboardMarkup()
+        keyboard.add(types.InlineKeyboardButton(text='Да', callback_data='end_register'))
+        keyboard.add(types.InlineKeyboardButton(text='Нет', callback_data='update_blank'))
+        await call.message.answer('Отлично', reply_markup=types.ReplyKeyboardRemove())
+        await call.message.answer('Закончим регистрацию?', reply_markup=keyboard)
 
 
 @dp.message_handler(content_types=['photo'])
@@ -254,6 +279,11 @@ async def handle_docs_photo(message: types.Message):
         await message.answer('Хотите ещё что-нибудь изменить?', reply_markup=keyboard)
     else:
         await message.answer('Хотите изменить анкету?', reply_markup=keyboard)
+
+
+@dp.message_handler(content_types=['file'])
+async def files(message: types.Message):
+    await message.answer('Извините, я очень боюсь файловых бомб >-<')
 
 
 if __name__ == "__main__":
