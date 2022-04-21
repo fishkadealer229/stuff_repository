@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+
+{% block content %}
+{{ super() }}
+{% for cat, msg in get_flashed_messages(True) %}
+<div class="flash {{cat}}">{{msg}}</div>
+{% endfor %}
+<form action="/profile" method="post" class="form-contact">
+                <p><a href="{{url_for('logout')}}">Выйти из профиля</a>
+            <p><label>Имя: </label> <input type="text" name="name_" value={{current_user.get_name()}} required />
+            <p><label>Фамилия: </label> <input type="text" name="surname_" value={{current_user.get_surname()}} required />
+            <p><label>Возраст: </label> <input type="text" name="age_" value={{current_user.get_age()}} required />
+            <p><label>Пол: </label> <input type="text" name="gender_" value={{current_user.get_gender()}} required />
+            <p><label>Локация: </label> <input type="text" name="locality_" value={{current_user.get_locality()}} required />
+            <p><label>Место работы: </label> <input type="text" name="workplace_" value={{current_user.get_work_place()}} required />
+            <p><label>Username: </label> <input type="text" name="username_" value={{current_user.get_id()}} required />
+            <p><label>Пароль: </label> <input type="text" name="password_" value={{current_user.get_pass()}} required />
+            <p><input type="submit" value="Редактировать" />
+            </form>
+{% endblock %}
